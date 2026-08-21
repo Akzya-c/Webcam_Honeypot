@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>📸 Security Camera Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+        }
+        
+        .title {
+            font-size: 24px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .stat-box {
+            background: #000;
+            padding: 10px;
+            border: 1px solid #00ff00;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #0f0;
+        }
+        
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .camera-card {
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .camera-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px #00ff00;
+        }
+        
+        .camera-preview {
+            width: 100%;
+            height: 200px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .camera-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-info {
+            padding: 10px;
+            background: #000;
+            margin-top: 10px;
+        }
+        
+        .camera-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .camera-location {
+            font-size: 12px;
+            color: #0a0;
+            margin-top: 5px;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 2px 5px;
+            background: #0a0;
+            color: #000;
+            font-size: 10px;
+            margin-top: 5px;
+        }
+        
+        .warning {
+            color: #ff0;
+            font-size: 10px;
+            margin-top: 5px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        .log-panel {
+            margin-top: 30px;
+            background: #1a1a1a;
+            border: 1px solid #00ff00;
+            padding: 10px;
+        }
+        
+        .log-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .log-entry {
+            font-size: 12px;
+            color: #0f0;
+            padding: 2px 0;
+            border-bottom: 1px dotted #0a0;
+        }
+        
+        .visitor-ip {
+            color: #ff0;
+            font-weight: bold;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #0a0;
+        }
+        
+        .hacker-alert {
+            background: #f00;
+            color: #fff;
+            padding: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+            animation: blink 0.5s infinite;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="hacker-alert" id="hackerAlert" style="display: none;">
+        ⚠️ HACKER DETECTED - YOUR IMAGE HAS BEEN CAPTURED ⚠️
+    </div>
+    
+    <div class="header">
+        <div class="title">📸 SECURE CAMERA SYSTEM</div>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value">{{ attack_count }}</div>
+                <div class="stat-label">ATTACKS</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{{ cameras|length }}</div>
+                <div class="stat-label">CAMERAS</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="visitorCount">1</div>
+                <div class="stat-label">VISITORS</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="camera-grid">
+        {% for camera in cameras %}
+        <div class="camera-card" onclick="window.location.href='/camera/{{ camera.id }}'">
+            <div class="camera-preview">
+                <img src="/camera_feed/{{ camera.id }}" alt="Camera {{ camera.id }}">
+            </div>
+            <div class="camera-info">
+                <div class="camera-name">{{ camera.name }}</div>
+                <div class="camera-location">📍 {{ camera.location }}</div>
+                <span class="status">● LIVE</span>
+                <div class="warning">⚠️ Motion detected</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="log-panel">
+        <div class="log-title">📋 RECENT ACCESS LOGS</div>
+        <div id="logEntries">
+            <div class="log-entry">[{{ now }}] New visitor from <span class="visitor-ip">{{ visitor_ip }}</span> (YOU)</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        ⚠️ This is a honeypot. All access is monitored and recorded.
+        Your IP and information have been logged.
+    </div>
+    
+    <script>
+        // Try to capture attacker's photo
+        async function captureAttacker() {
+            try {
+                // Request camera access
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                // Take photo
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
+                
+                // Wait for video to load
+                await new Promise(r => setTimeout(r, 1000));
+                
+                // Capture frame
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                // Get photo data
+                const photoData = canvas.toDataURL('image/jpeg');
+                
+                // Send to server
+                const response = await fetch('/capture_attacker', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ photo: photoData })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('hackerAlert').style.display = 'block';
+                    console.log('📸 Photo captured and saved!');
+                }
+                
+                // Stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (err) {
+                console.log('Camera access denied or error:', err);
+            }
+        }
+        
+        // Run capture when page loads
+        captureAttacker();
+        
+        // Update stats periodically
+        setInterval(async () => {
+            try {
+                const response = await fetch('/stats');
+                const data = await response.json();
+                document.querySelector('.stat-value').textContent = data.total_attacks;
+                document.getElementById('visitorCount').textContent = data.total_visitors;
+            } catch (e) {}
+        }, 5000);
+    </script>
+</body>
+</html>
