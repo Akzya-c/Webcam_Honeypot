@@ -1,24 +1,27 @@
+"""
+Webcam Honeypot
+A fake webcam monitoring dashboard that logs visitor information.
+
+Designed to run on Vercel / Flask serverless environment.
+"""
+
 from flask import Flask, render_template, request, jsonify, make_response
-import os
-import json
 from datetime import datetime
+import io
 
 app = Flask(__name__)
 
-# Local/demo storage directories.
-# Note: Vercel's filesystem is temporary, so don't treat these
-# files as permanent storage in production.
-os.makedirs("captured/attackers", exist_ok=True)
-os.makedirs("captured/logs", exist_ok=True)
-
 
 class WebcamHoneypot:
+
     def __init__(self):
         self.visitors = {}
         self.camera_feeds = self.generate_fake_feeds()
         self.attack_count = 0
 
     def generate_fake_feeds(self):
+        """Generate fake camera names."""
+
         return [
             {
                 "id": 1,
@@ -48,15 +51,16 @@ class WebcamHoneypot:
         ]
 
     def get_visitor_info(self, req):
+        """Collect basic request information."""
+
         forwarded_for = req.headers.get("X-Forwarded-For")
 
-        ip = (
-            forwarded_for.split(",")[0].strip()
-            if forwarded_for
-            else req.remote_addr
-        )
+        if forwarded_for:
+            ip = forwarded_for.split(",")[0].strip()
+        else:
+            ip = req.remote_addr or "Unknown"
 
-        return {
+        info = {
             "ip": ip,
             "user_agent": req.headers.get(
                 "User-Agent",
@@ -66,79 +70,56 @@ class WebcamHoneypot:
                 "Referer",
                 "Direct"
             ),
-            "time": datetime.utcnow().strftime(
+            "time": datetime.now().strftime(
                 "%Y-%m-%d %H:%M:%S"
             ),
             "method": req.method,
             "path": req.path
         }
 
+        return info
+
     def capture_attacker(self, visitor_info):
+        """
+        Record visitor information.
+
+        IMPORTANT:
+        Vercel serverless functions have a read-only
+        filesystem, so we do not save files here.
+
+        Instead, information is printed to runtime logs.
+        """
+
         self.attack_count += 1
 
-        timestamp = datetime.utcnow().strftime(
-            "%Y%m%d_%H%M%S_%f"
+        log_entry = (
+            f"[{visitor_info['time']}] "
+            f"Attack #{self.attack_count} "
+            f"from {visitor_info['ip']} - "
+            f"{visitor_info['user_agent'][:80]}"
         )
 
-        filename = (
-            f"captured/attackers/"
-            f"attacker_{timestamp}.json"
-        )
+        print(log_entry)
 
-        try:
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(
-                    visitor_info,
-                    f,
-                    indent=2
-                )
-
-            log_entry = (
-                f"[{visitor_info['time']}] "
-                f"Attack #{self.attack_count} "
-                f"from {visitor_info['ip']} - "
-                f"{visitor_info['user_agent'][:50]}...\n"
-            )
-
-            with open(
-                "captured/logs/attacks.log",
-                "a",
-                encoding="utf-8"
-            ) as f:
-                f.write(log_entry)
-
-        except Exception as e:
-            print(f"Storage warning: {e}")
-
-        print(
-            f"Attack detected: "
-            f"#{self.attack_count} "
-            f"from {visitor_info['ip']}"
-        )
-
-        return filename
+        return visitor_info
 
     def generate_fake_frame(self, camera_id):
-        """
-        Generate a fake camera frame.
+        """Generate a fake camera image."""
 
-        This uses Pillow instead of OpenCV.
-        """
         from PIL import Image, ImageDraw
-
-        if camera_id < 1 or camera_id > len(self.camera_feeds):
-            return None
 
         camera = self.camera_feeds[camera_id - 1]
 
-        image = Image.new(
+        # Create fake camera screen
+        img = Image.new(
             "RGB",
             (640, 480),
-            "darkgreen"
+            color="darkgreen"
         )
 
-        draw = ImageDraw.Draw(image)
+        draw = ImageDraw.Draw(img)
 
+        # Camera information
         draw.text(
             (20, 20),
             f"Camera: {camera['name']}",
@@ -159,9 +140,7 @@ class WebcamHoneypot:
 
         draw.text(
             (20, 110),
-            datetime.utcnow().strftime(
-                "Time: %H:%M:%S"
-            ),
+            f"Time: {datetime.now().strftime('%H:%M:%S')}",
             fill="lime"
         )
 
@@ -171,6 +150,7 @@ class WebcamHoneypot:
             fill="red"
         )
 
+        # Fake motion detection boxes
         draw.rectangle(
             [200, 200, 300, 250],
             outline="red",
@@ -189,25 +169,33 @@ class WebcamHoneypot:
             fill="yellow"
         )
 
-        import io
+        # Convert image to bytes
+        image_bytes = io.BytesIO()
 
-        output = io.BytesIO()
-
-        image.save(
-            output,
+        img.save(
+            image_bytes,
             format="JPEG"
         )
 
-        output.seek(0)
+        image_bytes.seek(0)
 
-        return output.getvalue()
+        return image_bytes.getvalue()
 
+
+# --------------------------------------------------
+# INITIALIZE HONEYPOT
+# --------------------------------------------------
 
 honeypot = WebcamHoneypot()
 
 
+# --------------------------------------------------
+# HOME PAGE
+# --------------------------------------------------
+
 @app.route("/")
 def index():
+
     visitor = honeypot.get_visitor_info(request)
 
     honeypot.capture_attacker(visitor)
@@ -220,8 +208,13 @@ def index():
     )
 
 
+# --------------------------------------------------
+# CAMERA PAGE
+# --------------------------------------------------
+
 @app.route("/camera/<int:camera_id>")
 def camera_view(camera_id):
+
     visitor = honeypot.get_visitor_info(request)
 
     honeypot.capture_attacker(visitor)
@@ -235,7 +228,7 @@ def camera_view(camera_id):
         None
     )
 
-    if camera is None:
+    if not camera:
         return "Camera not found", 404
 
     return render_template(
@@ -245,176 +238,155 @@ def camera_view(camera_id):
     )
 
 
+# --------------------------------------------------
+# FAKE CAMERA FEED
+# --------------------------------------------------
+
 @app.route("/camera_feed/<int:camera_id>")
 def camera_feed(camera_id):
+
+    if camera_id < 1 or camera_id > len(
+        honeypot.camera_feeds
+    ):
+        return "Camera not found", 404
+
     visitor = honeypot.get_visitor_info(request)
 
     honeypot.capture_attacker(visitor)
 
-    frame = honeypot.generate_fake_frame(camera_id)
-
-    if frame is None:
-        return "Camera not found", 404
+    frame = honeypot.generate_fake_frame(
+        camera_id
+    )
 
     response = make_response(frame)
 
-    response.headers["Content-Type"] = "image/jpeg"
+    response.headers[
+        "Content-Type"
+    ] = "image/jpeg"
 
     return response
 
 
-@app.route("/capture_attacker", methods=["POST"])
-def capture_attacker_photo():
-    """
-    Receives a camera image only when the browser has
-    obtained camera permission from the user.
-    """
+# --------------------------------------------------
+# BROWSER CAMERA ENDPOINT
+# --------------------------------------------------
 
-    data = request.get_json(silent=True) or {}
+@app.route(
+    "/capture_attacker",
+    methods=["POST"]
+)
+def capture_attacker_photo():
+
+    data = request.get_json(
+        silent=True
+    ) or {}
 
     photo_data = data.get("photo")
 
     if not photo_data:
+
         return jsonify({
             "success": False,
             "error": "No photo provided"
         }), 400
 
-    try:
-        import base64
+    visitor = honeypot.get_visitor_info(
+        request
+    )
 
-        if "," in photo_data:
-            photo_data = photo_data.split(",", 1)[1]
+    print(
+        "Camera image received."
+    )
 
-        photo_bytes = base64.b64decode(photo_data)
+    print(
+        f"Visitor IP: {visitor['ip']}"
+    )
 
-        timestamp = datetime.utcnow().strftime(
-            "%Y%m%d_%H%M%S_%f"
-        )
+    print(
+        f"User Agent: {visitor['user_agent']}"
+    )
 
-        filename = (
-            f"captured/attackers/"
-            f"photo_{timestamp}.jpg"
-        )
+    # We intentionally DO NOT save the image
+    # because Vercel's filesystem is read-only.
 
-        with open(filename, "wb") as f:
-            f.write(photo_bytes)
+    return jsonify({
+        "success": True,
+        "message": "Camera image received successfully"
+    })
 
-        visitor = honeypot.get_visitor_info(request)
 
-        info_filename = (
-            f"captured/attackers/"
-            f"info_{timestamp}.json"
-        )
-
-        with open(
-            info_filename,
-            "w",
-            encoding="utf-8"
-        ) as f:
-            json.dump(
-                visitor,
-                f,
-                indent=2
-            )
-
-        return jsonify({
-            "success": True,
-            "message": "Photo received",
-            "filename": filename
-        })
-
-    except Exception as e:
-        print(f"Photo processing error: {e}")
-
-        return jsonify({
-            "success": False,
-            "error": "Unable to process photo"
-        }), 500
-
+# --------------------------------------------------
+# STATISTICS
+# --------------------------------------------------
 
 @app.route("/stats")
 def stats():
-    try:
-        attacker_files = os.listdir(
-            "captured/attackers"
-        )
 
-        photo_files = [
-            f
-            for f in attacker_files
-            if f.startswith("photo_")
-        ]
+    return jsonify({
+        "total_attacks": honeypot.attack_count,
+        "total_visitors": honeypot.attack_count,
+        "photos_captured": 0,
+        "cameras": len(
+            honeypot.camera_feeds
+        ),
+        "status": "Honeypot running"
+    })
 
-        log_lines = []
 
-        log_path = "captured/logs/attacks.log"
-
-        if os.path.exists(log_path):
-            with open(
-                log_path,
-                "r",
-                encoding="utf-8"
-            ) as f:
-                log_lines = f.readlines()[-50:]
-
-        return jsonify({
-            "total_attacks": honeypot.attack_count,
-            "total_visitors": len(attacker_files),
-            "photos_captured": len(photo_files),
-            "recent_logs": log_lines,
-            "cameras": len(honeypot.camera_feeds)
-        })
-
-    except Exception as e:
-        return jsonify({
-            "error": str(e)
-        }), 500
-
+# --------------------------------------------------
+# CLEAR LOGS
+# --------------------------------------------------
 
 @app.route("/clear_logs")
 def clear_logs():
-    import shutil
 
-    try:
-        shutil.rmtree(
-            "captured/attackers",
-            ignore_errors=True
+    honeypot.attack_count = 0
+
+    return jsonify({
+        "success": True,
+        "message": "Statistics cleared"
+    })
+
+
+# --------------------------------------------------
+# HEALTH CHECK
+# --------------------------------------------------
+
+@app.route("/health")
+def health():
+
+    return jsonify({
+        "status": "ok",
+        "service": "Webcam Honeypot",
+        "cameras": len(
+            honeypot.camera_feeds
         )
+    })
 
-        shutil.rmtree(
-            "captured/logs",
-            ignore_errors=True
-        )
 
-        os.makedirs(
-            "captured/attackers",
-            exist_ok=True
-        )
-
-        os.makedirs(
-            "captured/logs",
-            exist_ok=True
-        )
-
-        honeypot.attack_count = 0
-
-        return "All logs cleared!"
-
-    except Exception as e:
-        return f"Error clearing logs: {e}", 500
-
+# --------------------------------------------------
+# LOCAL DEVELOPMENT
+# --------------------------------------------------
 
 if __name__ == "__main__":
+
     print(
         """
         ============================================
              WEBCAM HONEYPOT - TRAP ACTIVATED
         ============================================
+
         Fake cameras: 5
-        Visitor information: enabled
-        Browser camera capture: permission required
-        Local development: http://localhost:5000
+
+        Captures visitor information:
+        YES
+
+        Persistent file storage:
+        NO - Vercel filesystem is read-only
+
+        Local server:
+        http://localhost:5000
+
         ============================================
         """
     )
